@@ -1,5 +1,6 @@
 let meinChart = null;
 let globaleStatistik = {}; 
+let schuelerVorhersage = []; // Speichert die von den Schülern eingezeichneten Vorhersagewerte
 let gesamtWuerfeZaehler = 0; 
 let aktuellerModus = 'einzel'; 
 let simulationsInterval = null; 
@@ -13,7 +14,7 @@ let rohdatenProtokoll = [];
 // Zeitstempel für den Simulationsstart
 let simulationsStartZeitpunkt = null;
 
-// Mathematisch definierte Drehwinkel für die echten 3D-Seiten eines W6
+// Exakt berechnete Drehwinkel für die 3D-Würfelflächen des W6
 const w6Drehungen = {
     1: 'rotateY(0deg) rotateX(0deg)',
     2: 'rotateY(-90deg) rotateX(0deg)',
@@ -66,9 +67,12 @@ function statistikZuruecksetzen() {
 
     let minSumme = anzahlWuerfel;
     let maxSumme = anzahlWuerfel * seiten;
+    
+    schuelerVorhersage = [];
     for (let i = minSumme; i <= maxSumme; i++) {
         globaleStatistik[i] = 0;
         letztesUpdateProBalken[i] = -99999; 
+        schuelerVorhersage.push(null); // Initial leer (Schüler zeichnet selbst ein)
     }
 
     document.getElementById('exportBtn').disabled = true;
@@ -115,7 +119,20 @@ function initChart() {
     let daten = Object.values(globaleStatistik);
 
     const gesamtKombinationen = Math.pow(seiten, anzahlWuerfel);
-    const bezugsMenge = gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 100;
+
+    // Berechne die feste maximale Höhe für eine stabile Y-Achse
+    const gesamtZiel = parseInt(document.getElementById('wurfAnzahl').value) || 2000;
+    const minSumme = anzahlWuerfel;
+    const maxSumme = anzahlWuerfel * seiten;
+    const zentrumSumme = Math.floor((minSumme + maxSumme) / 2);
+    const zentrumKombis = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, zentrumSumme);
+    
+    // Maximale theoretische Höhe des Mittelbalkens berechnen + 35% Puffer nach oben
+    const maxTheoretischeHoehe = (zentrumKombis / gesamtKombinationen) * gesamtZiel;
+    const festerMaxYWert = Math.ceil(maxTheoretischeHoehe * 1.35);
+
+    // Bezugsmenge ist im Massenmodus immer sofort das Endziel (feste Kurve)
+    const bezugsMenge = (aktuellerModus === 'massen') ? gesamtZiel : (gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 1);
 
     let theoretischeVerteilung = labels.map(summe => {
         let wege = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, parseInt(summe));
@@ -140,10 +157,11 @@ function initChart() {
             borderColor: 'rgba(30, 41, 59, 0.3)',
             borderWidth: 1,
             borderRadius: 4,
-            order: 2
+            order: 3
         }
     ];
 
+    // Die mathematische Vorhersage & die Schülervorhersage gibt es NUR im Massensimulations-Modus
     if (aktuellerModus === 'massen') {
         datasets.push({
             label: `Mathematische Vorhersage-Kurve`,
@@ -153,6 +171,21 @@ function initChart() {
             borderWidth: 3,
             pointRadius: labels.length > 30 ? 0 : 3,
             pointBackgroundColor: '#ef4444',
+            tension: 0.3,
+            fill: false,
+            order: 2
+        });
+
+        datasets.push({
+            label: `Schüler-Vorhersage (Klicke zum Einzeichnen)`,
+            data: [...schuelerVorhersage],
+            type: 'line',
+            borderColor: '#10b981', // Schönes Grün
+            borderDash: [5, 5],
+            borderWidth: 3,
+            pointRadius: 6,
+            pointHoverRadius: 9,
+            pointBackgroundColor: '#10b981',
             tension: 0.3,
             fill: false,
             order: 1
@@ -170,7 +203,12 @@ function initChart() {
             maintainAspectRatio: false, 
             animation: false, 
             scales: {
-                y: { beginAtZero: true, grid: { color: '#e2e8f0' } },
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: '#e2e8f0' },
+                    // Fixiert die Skala exakt auf das Endziel im Massenmodus
+                    max: (aktuellerModus === 'massen') ? festerMaxYWert : null
+                },
                 x: { grid: { display: false } }
             },
             plugins: {
@@ -194,6 +232,29 @@ function initChart() {
             }
         }
     });
+
+    // Klick-Listener auf den Canvas legen, damit Schüler ihre Kurve direkt hineinklicken können
+    ctx.canvas.onclick = function(evt) {
+        if (aktuellerModus !== 'massen' || !meinChart) return;
+
+        const points = meinChart.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true);
+        if (points.length > 0) {
+            const index = points[0].index;
+            
+            // Ermittle den geklickten Y-Wert basierend auf der Pixelposition
+            const rect = ctx.canvas.getBoundingClientRect();
+            const clickY = evt.clientY - rect.top;
+            const yValue = meinChart.scales.y.getValueForPixel(clickY);
+            
+            // Begrenze den Wert logisch zwischen 0 und dem Maximum der Y-Achse
+            const gerundeterWert = Math.max(0, Math.min(meinChart.scales.y.max, Math.round(yValue)));
+            
+            // Im Speicher ablegen und im Chart-Dataset updaten (Dataset-Index 2 ist die Schülervorhersage)
+            schuelerVorhersage[index] = gerundeterWert;
+            meinChart.data.datasets[2].data[index] = gerundeterWert;
+            meinChart.update('none');
+        }
+    };
 }
 
 function aktualisiereChart() {
@@ -202,11 +263,14 @@ function aktualisiereChart() {
     const seiten = parseInt(document.getElementById('wuerfelSeiten').value);
     const anzahlWuerfel = parseInt(document.getElementById('wuerfelAnzahl').value);
     const gesamtKombinationen = Math.pow(seiten, anzahlWuerfel);
-    const bezugsMenge = gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 100;
+
+    const bezugsMenge = (aktuellerModus === 'massen')
+        ? (parseInt(document.getElementById('wurfAnzahl').value) || 2000)
+        : (gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 1);
 
     meinChart.data.datasets[0].data = Object.values(globaleStatistik);
     
-    if (meinChart.data.datasets[1]) {
+    if (aktuellerModus === 'massen' && meinChart.data.datasets[1]) {
         meinChart.data.datasets[1].data = meinChart.data.labels.map(summe => {
             let wege = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, parseInt(summe));
             return (wege / gesamtKombinationen) * bezugsMenge;
@@ -293,7 +357,7 @@ function holeVergangeneSimulationsZeit() {
     return `${minuten}:${sekunden}.${milliSekunden}`;
 }
 
-// Baut den 3D-W6 im DOM auf
+// Baut die 3D-Bühne im DOM auf
 function erstelle3DWuerfel() {
     const scene = document.createElement('div');
     scene.className = 'dice-scene';
@@ -325,7 +389,7 @@ function fuehreAktionAus() {
     if (aktuellerModus === 'einzel') {
         const container = document.getElementById('diceContainer');
         container.innerHTML = ''; 
-        document.getElementById('actionBtn').disabled = true; // Button während des Würfelns sperren
+        document.getElementById('actionBtn').disabled = true; // Sperre während Animation
         
         let summe = 0;
         let einzelErgebnisse = [];
@@ -337,12 +401,10 @@ function fuehreAktionAus() {
             summe += wurf;
 
             if (seiten === 6) {
-                // Bei 6-seitigen Würfeln nutzen wir die echten 3D-Würfel
                 const { scene, cube } = erstelle3DWuerfel();
                 container.appendChild(scene);
                 wuerfelObjekte.push(cube);
             } else {
-                // Bei anderen Würfeln (D4, D8 etc.) rendern wir schöne, rotierende Polyeder-Kärtchen
                 const poly = document.createElement('div');
                 poly.className = 'visual-dice-poly';
                 poly.innerText = '?';
@@ -351,32 +413,27 @@ function fuehreAktionAus() {
             }
         }
 
-        // Starte Animations-Phase
         let animationDuration = 1000; 
 
         wuerfelObjekte.forEach((obj, idx) => {
             const finalValue = einzelErgebnisse[idx];
 
             if (seiten === 6) {
-                // Wildes Rotieren im 3D-Raum
                 const randomX = Math.floor(Math.random() * 3) * 360 + 720;
                 const randomY = Math.floor(Math.random() * 3) * 360 + 720;
                 obj.style.transform = `rotateX(${randomX}deg) rotateY(${randomY}deg)`;
 
-                // Nach Ablauf der Roll-Zeit den exakten Drehwinkel für die Augenzahl setzen
                 setTimeout(() => {
                     obj.style.transition = 'transform 0.4s ease-out';
                     obj.style.transform = w6Drehungen[finalValue];
                 }, animationDuration - 300);
             } else {
-                // Text-Wechsel bei Polyedern am Ende der Animation
                 setTimeout(() => {
                     obj.innerText = finalValue;
                 }, animationDuration - 100);
             }
         });
 
-        // Verarbeitung nach Abschluss der Würfel-Animation
         setTimeout(() => {
             globaleStatistik[summe]++;
             gesamtWuerfeZaehler++; 
@@ -408,7 +465,11 @@ function fuehreAktionAus() {
             alert("Sicherheitshinweis: Die maximale Wurfanzahl ist auf 100.000 begrenzt.");
         }
         
+        // Statistik sauber zurücksetzen, Schülervorhersage jedoch NICHT löschen, damit sie sichtbar bleibt!
+        const alteVorhersage = [...schuelerVorhersage]; 
         statistikZuruecksetzen();
+        schuelerVorhersage = alteVorhersage; 
+        
         initChart(); 
         document.getElementById('exportBtn').disabled = true; 
         
@@ -520,7 +581,7 @@ function wechsleModus(modus) {
         massenInputGroup.classList.remove('hidden');
         visualCard.classList.add('hidden');
         actionBtn.innerText = 'Live-Simulation starten';
-        document.getElementById('wurfErgebnisText').innerText = 'Bereit für das Live-Wachstum der Kurve.';
+        document.getElementById('wurfErgebnisText').innerText = 'Klicke ins Diagramm, um deine Vorhersage einzuzeichnen!';
     }
     
     document.getElementById('historyList').innerHTML = ''; 
@@ -529,7 +590,7 @@ function wechsleModus(modus) {
     updateDidaktikText();
 }
 
-// Collapsible (Einklapp-Funktion) für die Info-Karte registrieren
+// Akkordeon-Klick-Event für didaktischen Hintergrund registrieren
 document.getElementById('toggleDidaktik').addEventListener('click', () => {
     const card = document.getElementById('didaktikCard');
     card.classList.toggle('collapsed');
@@ -551,7 +612,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 document.getElementById('tabEinzel').addEventListener('click', () => wechsleModus('einzel'));
 document.getElementById('tabMassen').addEventListener('click', () => wechsleModus('massen'));
 
-const einstellungsIds = ['wuerfelSeiten', 'wuerfelAnzahl'];
+const einstellungsIds = ['wuerfelSeiten', 'wuerfelAnzahl', 'wurfAnzahl'];
 einstellungsIds.forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
         statistikZuruecksetzen();
