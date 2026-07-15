@@ -128,6 +128,16 @@ function initChart() {
         return (wege / gesamtKombinationen) * bezugsMenge;
     });
 
+    // --- BERECHNUNG DER FESTEN AXIS-SKALIERUNG ---
+    // Wir berechnen das theoretische Maximum der Kurve in der Mitte der Verteilung
+    const minSumme = anzahlWuerfel;
+    const maxSumme = anzahlWuerfel * seiten;
+    const zentrumSumme = Math.floor((minSumme + maxSumme) / 2);
+    const zentrumKombis = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, zentrumSumme);
+    const maxTheoretischeHoehe = (zentrumKombis / gesamtKombinationen) * gesamtZiel;
+    // 35% Sicherheitsabstand nach oben, damit die Kurven nicht am oberen Rand kleben
+    const festerMaxYWert = Math.ceil(maxTheoretischeHoehe * 1.35);
+
     if (meinChart) {
         meinChart.destroy();
     }
@@ -192,7 +202,12 @@ function initChart() {
             maintainAspectRatio: false, 
             animation: false, 
             scales: {
-                y: { beginAtZero: true, grid: { color: '#e2e8f0' } },
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: '#e2e8f0' },
+                    // Wichtig: Im Massenmodus erzwingen wir die feste Skalierung von Anfang an!
+                    max: (aktuellerModus === 'massen') ? festerMaxYWert : null
+                },
                 x: { grid: { display: false } }
             },
             plugins: {
@@ -236,8 +251,8 @@ function initChart() {
             const clickY = evt.clientY - rect.top;
             const yValue = meinChart.scales.y.getValueForPixel(clickY);
             
-            // Logische Schranken einhalten
-            const gerundeterWert = Math.max(0, Math.round(yValue));
+            // Logische Schranken einhalten (0 bis maximaler Y-Skalenwert)
+            const gerundeterWert = Math.max(0, Math.min(meinChart.scales.y.max, Math.round(yValue)));
             
             schuelerVorhersage[index] = gerundeterWert;
             meinChart.data.datasets[2].data[index] = gerundeterWert;
@@ -338,12 +353,13 @@ function holeVergangeneSimulationsZeit() {
     if (!simulationsStartZeitpunkt) return "00:00.000";
     
     const jetzt = performance.now();
-    const differenzInMilliSekunden = jetzt - simulationsStartZeitpunkt;
+    const differenzInMilliSekunden = jetzt - simulationsStartZeitblock || 0;
+    const diff = jetzt - simulationsStartZeitpunkt;
     
-    const gesamtSekunden = Math.floor(differenzInMilliSekunden / 1000);
+    const gesamtSekunden = Math.floor(diff / 1000);
     const minuten = String(Math.floor(gesamtSekunden / 60)).padStart(2, '0');
     const sekunden = String(gesamtSekunden % 60).padStart(2, '0');
-    const milliSekunden = String(Math.floor(differenzInMilliSekunden % 1000)).padStart(3, '0');
+    const milliSekunden = String(Math.floor(diff % 1000)).padStart(3, '0');
     
     return `${minuten}:${sekunden}.${milliSekunden}`;
 }
@@ -560,10 +576,10 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 document.getElementById('tabEinzel').addEventListener('click', () => wechsleModus('einzel'));
 document.getElementById('tabMassen').addEventListener('click', () => wechsleModus('massen'));
 
-const einstellungsIds = ['wuerfelSeiten', 'wuerfelAnzahl'];
+const einstellungsIds = ['wuerfelSeiten', 'wuerfelAnzahl', 'wurfAnzahl'];
 einstellungsIds.forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
-        // Löscht die Schülervorhersage, da sich der Wertebereich (X-Achse) verändert hat
+        // Löscht die Schülervorhersage, da sich der Wertebereich oder die Skalierung verändert hat
         statistikZuruecksetzen(true);
         initChart();
         updateDidaktikText();
