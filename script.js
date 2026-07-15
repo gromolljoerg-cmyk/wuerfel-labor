@@ -13,10 +13,15 @@ let rohdatenProtokoll = [];
 // Zeitstempel für den Simulationsstart
 let simulationsStartZeitpunkt = null;
 
-// Vorhersage-Steuerung
-let vorhersageModusAktiv = false;
-let vorhersageDaten = null; // Speichert absolute Vorhersagewerte passend zur Skalierung
-let istZeichnenAktiv = false;
+// Mathematisch definierte Drehwinkel für die echten 3D-Seiten eines W6
+const w6Drehungen = {
+    1: 'rotateY(0deg) rotateX(0deg)',
+    2: 'rotateY(-90deg) rotateX(0deg)',
+    3: 'rotateX(-90deg) rotateY(0deg)',
+    4: 'rotateX(90deg) rotateY(0deg)',
+    5: 'rotateY(90deg) rotateX(0deg)',
+    6: 'rotateY(180deg) rotateX(0deg)'
+};
 
 function wuerfleEinmal(seiten) {
     return Math.floor(Math.random() * seiten) + 1;
@@ -102,8 +107,7 @@ function holeBalkenGradienten(ctx, chartArea, index, key) {
 }
 
 function initChart() {
-    const canvas = document.getElementById('wuerfelChart');
-    const ctx = canvas.getContext('2d');
+    const ctx = document.getElementById('wuerfelChart').getContext('2d');
     const seiten = parseInt(document.getElementById('wuerfelSeiten').value);
     const anzahlWuerfel = parseInt(document.getElementById('wuerfelAnzahl').value);
 
@@ -111,27 +115,15 @@ function initChart() {
     let daten = Object.values(globaleStatistik);
 
     const gesamtKombinationen = Math.pow(seiten, anzahlWuerfel);
-    
-    // Bezugsmenge bestimmen
-    let bezugsMenge = gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : (parseInt(document.getElementById('wurfAnzahl').value) || 2000);
+    const bezugsMenge = gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 100;
 
-    // Berechne theoretische Verteilung
     let theoretischeVerteilung = labels.map(summe => {
         let wege = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, parseInt(summe));
         return (wege / gesamtKombinationen) * bezugsMenge;
     });
 
-    // Bestimme eine feste, gut lesbare Obergrenze für die Y-Achse
-    let theoretischesMax = Math.max(...theoretischeVerteilung);
-    let yAchsenMax = Math.max(10, Math.ceil(theoretischesMax * 1.35));
-
     if (meinChart) {
         meinChart.destroy();
-    }
-
-    // Falls noch keine Vorhersage vorhanden ist, initialisieren
-    if (!vorhersageDaten || vorhersageDaten.length !== labels.length) {
-        vorhersageDaten = new Array(labels.length).fill(null);
     }
 
     let datasets = [
@@ -148,12 +140,11 @@ function initChart() {
             borderColor: 'rgba(30, 41, 59, 0.3)',
             borderWidth: 1,
             borderRadius: 4,
-            order: 3
+            order: 2
         }
     ];
 
     if (aktuellerModus === 'massen') {
-        // 1. Mathematische Verteilungskurve (Rot)
         datasets.push({
             label: `Mathematische Vorhersage-Kurve`,
             data: theoretischeVerteilung,
@@ -164,23 +155,6 @@ function initChart() {
             pointBackgroundColor: '#ef4444',
             tension: 0.3,
             fill: false,
-            order: 2
-        });
-
-        // 2. Schüler-Vorhersagekurve (Cyan, gestrichelt)
-        datasets.push({
-            label: `Deine Schüler-Vorhersage 🔮`,
-            data: vorhersageDaten,
-            type: 'line',
-            borderColor: '#06b6d4',
-            borderWidth: 3,
-            borderDash: [6, 6],
-            pointRadius: 6,
-            pointHoverRadius: 8,
-            pointBackgroundColor: '#06b6d4',
-            tension: 0.3,
-            fill: false,
-            spanGaps: true, // Erlaubt unvollständiges Zeichnen der Linie
             order: 1
         });
     }
@@ -196,12 +170,7 @@ function initChart() {
             maintainAspectRatio: false, 
             animation: false, 
             scales: {
-                y: { 
-                    beginAtZero: true, 
-                    grid: { color: '#e2e8f0' },
-                    // Fixiere die Achse im Massenmodus, um die Vorhersage optimal zeichenbar zu machen
-                    max: aktuellerModus === 'massen' ? yAchsenMax : undefined
-                },
+                y: { beginAtZero: true, grid: { color: '#e2e8f0' } },
                 x: { grid: { display: false } }
             },
             plugins: {
@@ -225,68 +194,6 @@ function initChart() {
             }
         }
     });
-
-    // Registriere die Drag & Draw-Handler für die Schülerzeichnung
-    canvas.addEventListener('mousedown', starteZeichnen);
-    canvas.addEventListener('touchstart', starteZeichnen, { passive: true });
-
-    canvas.addEventListener('mousemove', zeichnePunkte);
-    canvas.addEventListener('touchmove', zeichnePunkte, { passive: true });
-
-    window.addEventListener('mouseup', beendeZeichnen);
-    window.addEventListener('touchend', beendeZeichnen);
-}
-
-// Logik zur Umrechnung von Maus-/Touch-Koordinaten auf die Skalen des Diagramms
-function starteZeichnen(e) {
-    if (!vorhersageModusAktiv) return;
-    istZeichnenAktiv = true;
-    zeichnePunkte(e);
-}
-
-function zeichnePunkte(e) {
-    if (!vorhersageModusAktiv || !istZeichnenAktiv || !meinChart) return;
-
-    const canvas = document.getElementById('wuerfelChart');
-    const rect = canvas.getBoundingClientRect();
-    
-    // Unterstütze Maus- und Touch-Events
-    let clientX, clientY;
-    if (e.touches && e.touches.length > 0) {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-    } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-    }
-
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    const xAxis = meinChart.scales.x;
-    const yAxis = meinChart.scales.y;
-
-    const dataX = xAxis.getValueForPixel(x);
-    const dataY = yAxis.getValueForPixel(y);
-
-    const labels = Object.keys(globaleStatistik);
-
-    if (dataX >= 0 && dataX < labels.length) {
-        // Begrenze den Wert auf realistische Werte (nicht unter 0, nicht über Achsen-Max)
-        const wertY = Math.max(0, Math.min(yAxis.max, dataY));
-        vorhersageDaten[dataX] = Math.round(wertY);
-        
-        // Update die Prediction direkt im Datensatz, um Lags zu verhindern
-        const predictionDatasetIndex = meinChart.data.datasets.length - 1;
-        if (meinChart.data.datasets[predictionDatasetIndex]) {
-            meinChart.data.datasets[predictionDatasetIndex].data = [...vorhersageDaten];
-            meinChart.update('none');
-        }
-    }
-}
-
-function beendeZeichnen() {
-    istZeichnenAktiv = false;
 }
 
 function aktualisiereChart() {
@@ -295,8 +202,7 @@ function aktualisiereChart() {
     const seiten = parseInt(document.getElementById('wuerfelSeiten').value);
     const anzahlWuerfel = parseInt(document.getElementById('wuerfelAnzahl').value);
     const gesamtKombinationen = Math.pow(seiten, anzahlWuerfel);
-    
-    let bezugsMenge = gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : (parseInt(document.getElementById('wurfAnzahl').value) || 2000);
+    const bezugsMenge = gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 100;
 
     meinChart.data.datasets[0].data = Object.values(globaleStatistik);
     
@@ -305,13 +211,6 @@ function aktualisiereChart() {
             let wege = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, parseInt(summe));
             return (wege / gesamtKombinationen) * bezugsMenge;
         });
-    }
-
-    // Wenn gewürfelt wird, skaliert die Vorhersage automatisch visuell mit der Gesamtmenge mit!
-    if (meinChart.data.datasets[2] && gesamtWuerfeZaehler > 0) {
-        const gesamtZiel = parseInt(document.getElementById('wurfAnzahl').value) || 2000;
-        const skaliertesVerhaeltnis = gesamtWuerfeZaehler / gesamtZiel;
-        meinChart.data.datasets[2].data = vorhersageDaten.map(val => val !== null ? val * skaliertesVerhaeltnis : null);
     }
 
     meinChart.update('none'); 
@@ -394,6 +293,25 @@ function holeVergangeneSimulationsZeit() {
     return `${minuten}:${sekunden}.${milliSekunden}`;
 }
 
+// Baut den 3D-W6 im DOM auf
+function erstelle3DWuerfel() {
+    const scene = document.createElement('div');
+    scene.className = 'dice-scene';
+
+    const cube = document.createElement('div');
+    cube.className = 'cube';
+
+    for (let i = 1; i <= 6; i++) {
+        const face = document.createElement('div');
+        face.className = `cube-face face-${i}`;
+        face.innerText = i;
+        cube.appendChild(face);
+    }
+
+    scene.appendChild(cube);
+    return { scene, cube };
+}
+
 function fuehreAktionAus() {
     if (simulationsInterval) clearInterval(simulationsInterval);
 
@@ -407,39 +325,78 @@ function fuehreAktionAus() {
     if (aktuellerModus === 'einzel') {
         const container = document.getElementById('diceContainer');
         container.innerHTML = ''; 
+        document.getElementById('actionBtn').disabled = true; // Button während des Würfelns sperren
         
         let summe = 0;
         let einzelErgebnisse = [];
+        let wuerfelObjekte = [];
+
         for (let j = 0; j < anzahlWuerfel; j++) {
             let wurf = wuerfleEinmal(seiten);
             einzelErgebnisse.push(wurf);
             summe += wurf;
+
+            if (seiten === 6) {
+                // Bei 6-seitigen Würfeln nutzen wir die echten 3D-Würfel
+                const { scene, cube } = erstelle3DWuerfel();
+                container.appendChild(scene);
+                wuerfelObjekte.push(cube);
+            } else {
+                // Bei anderen Würfeln (D4, D8 etc.) rendern wir schöne, rotierende Polyeder-Kärtchen
+                const poly = document.createElement('div');
+                poly.className = 'visual-dice-poly';
+                poly.innerText = '?';
+                container.appendChild(poly);
+                wuerfelObjekte.push(poly);
+            }
         }
-        
-        einzelErgebnisse.forEach(wert => {
-            const diceHtml = document.createElement('div');
-            diceHtml.className = 'visual-dice';
-            diceHtml.innerText = wert;
-            container.appendChild(diceHtml);
+
+        // Starte Animations-Phase
+        let animationDuration = 1000; 
+
+        wuerfelObjekte.forEach((obj, idx) => {
+            const finalValue = einzelErgebnisse[idx];
+
+            if (seiten === 6) {
+                // Wildes Rotieren im 3D-Raum
+                const randomX = Math.floor(Math.random() * 3) * 360 + 720;
+                const randomY = Math.floor(Math.random() * 3) * 360 + 720;
+                obj.style.transform = `rotateX(${randomX}deg) rotateY(${randomY}deg)`;
+
+                // Nach Ablauf der Roll-Zeit den exakten Drehwinkel für die Augenzahl setzen
+                setTimeout(() => {
+                    obj.style.transition = 'transform 0.4s ease-out';
+                    obj.style.transform = w6Drehungen[finalValue];
+                }, animationDuration - 300);
+            } else {
+                // Text-Wechsel bei Polyedern am Ende der Animation
+                setTimeout(() => {
+                    obj.innerText = finalValue;
+                }, animationDuration - 100);
+            }
         });
 
-        globaleStatistik[summe]++;
-        gesamtWuerfeZaehler++; 
-        letztesUpdateProBalken[summe] = gesamtWuerfeZaehler; 
+        // Verarbeitung nach Abschluss der Würfel-Animation
+        setTimeout(() => {
+            globaleStatistik[summe]++;
+            gesamtWuerfeZaehler++; 
+            letztesUpdateProBalken[summe] = gesamtWuerfeZaehler; 
 
-        rohdatenProtokoll.push({
-            id: gesamtWuerfeZaehler,
-            zeit: holeVergangeneSimulationsZeit(),
-            einzel: [...einzelErgebnisse],
-            summe: summe
-        });
+            rohdatenProtokoll.push({
+                id: gesamtWuerfeZaehler,
+                zeit: holeVergangeneSimulationsZeit(),
+                einzel: [...einzelErgebnisse],
+                summe: summe
+            });
 
-        aktualisiereChart();
-        addWurfToHistory(einzelErgebnisse, summe);
-        document.getElementById('exportBtn').disabled = false;
+            aktualisiereChart();
+            addWurfToHistory(einzelErgebnisse, summe);
+            document.getElementById('exportBtn').disabled = false;
+            document.getElementById('actionBtn').disabled = false; // Wieder freigeben
 
-        document.getElementById('wurfErgebnisText').innerText = 
-            `Ergebnis: ${einzelErgebnisse.join(' + ')} = Augensumme ${summe}`;
+            document.getElementById('wurfErgebnisText').innerText = 
+                `Ergebnis: ${einzelErgebnisse.join(' + ')} = Augensumme ${summe}`;
+        }, animationDuration);
             
     } else {
         let inputField = document.getElementById('wurfAnzahl');
@@ -540,7 +497,6 @@ function exportiereRohdatenAlsCSV() {
     document.body.removeChild(downloadLink);
 }
 
-// Handler für Moduswechsel & Sperre
 function wechsleModus(modus) {
     aktuellerModus = modus;
     if (simulationsInterval) clearInterval(simulationsInterval);
@@ -551,87 +507,32 @@ function wechsleModus(modus) {
     const visualCard = document.getElementById('visualCard');
     const actionBtn = document.getElementById('actionBtn');
 
-    // Beende ggf. den Zeichenmodus beim Moduswechsel
-    vorhersageModusAktiv = false;
-    document.getElementById('wuerfelChart').classList.remove('drawing-active');
-
     if (modus === 'einzel') {
         tabEinzel.classList.add('active');
         tabMassen.classList.remove('active');
         massenInputGroup.classList.add('hidden');
         visualCard.classList.remove('hidden');
         actionBtn.innerText = 'Einmal würfeln';
-        actionBtn.disabled = false;
         document.getElementById('wurfErgebnisText').innerText = 'Klicke auf "Einmal würfeln"!';
     } else {
         tabMassen.classList.add('active');
         tabEinzel.classList.remove('active');
         massenInputGroup.classList.remove('hidden');
         visualCard.classList.add('hidden');
-        
-        // Schüler-Sperre: Aktion erst freigeben, wenn gezeichnet wurde
-        actionBtn.innerText = 'Simulation gesperrt';
-        actionBtn.disabled = true;
-        document.getElementById('wurfErgebnisText').innerText = 'Gib zuerst links deine Hypothese (Vorhersage) ab!';
-        
-        // Reset Prediction Button Zustand
-        const pBtn = document.getElementById('predictBtn');
-        pBtn.innerText = "Kurve einzeichnen starten";
-        pBtn.className = "btn-predict";
-        document.getElementById('resetPredictBtn').classList.add('hidden');
+        actionBtn.innerText = 'Live-Simulation starten';
+        document.getElementById('wurfErgebnisText').innerText = 'Bereit für das Live-Wachstum der Kurve.';
     }
     
     document.getElementById('historyList').innerHTML = ''; 
-    vorhersageDaten = null;
     statistikZuruecksetzen();
     initChart();
     updateDidaktikText();
 }
 
-// Vorhersage-Modus Steuerung
-document.getElementById('predictBtn').addEventListener('click', () => {
-    const pBtn = document.getElementById('predictBtn');
-    const resetBtn = document.getElementById('resetPredictBtn');
-    const canvas = document.getElementById('wuerfelChart');
-    const actionBtn = document.getElementById('actionBtn');
-
-    if (!vorhersageModusAktiv) {
-        // Starte den Zeichenmodus
-        vorhersageModusAktiv = true;
-        pBtn.innerText = "Fertigstellen & freischalten ✔";
-        pBtn.className = "btn-predict active-drawing";
-        canvas.classList.add('drawing-active');
-        resetBtn.classList.remove('hidden');
-        actionBtn.disabled = true;
-        actionBtn.innerText = "Zeichnen aktiv...";
-        document.getElementById('wurfErgebnisText').innerText = "Klicke oder ziehe mit gedrückter Maustaste über das Diagramm, um deine Kurve zu zeichnen!";
-    } else {
-        // Beende den Zeichenmodus
-        vorhersageModusAktiv = false;
-        pBtn.innerText = "Vorhersage bearbeiten";
-        pBtn.className = "btn-predict";
-        canvas.classList.remove('drawing-active');
-        
-        // Prüfen, ob gezeichnet wurde (mindestens ein Punkt ungleich null)
-        const hatDaten = vorhersageDaten && vorhersageDaten.some(val => val !== null);
-        
-        if (hatDaten) {
-            actionBtn.disabled = false;
-            actionBtn.innerText = "Live-Simulation starten";
-            document.getElementById('wurfErgebnisText').innerText = "Bereit für den Start! Vergleiche die echten Daten live mit deiner Hypothese.";
-        } else {
-            actionBtn.disabled = true;
-            actionBtn.innerText = "Simulation gesperrt";
-            document.getElementById('wurfErgebnisText').innerText = "Zeichne zuerst deine Kurve ein!";
-        }
-    }
-});
-
-// Vorhersage zurücksetzen
-document.getElementById('resetPredictBtn').addEventListener('click', () => {
-    const labels = Object.keys(globaleStatistik);
-    vorhersageDaten = new Array(labels.length).fill(null);
-    initChart();
+// Collapsible (Einklapp-Funktion) für die Info-Karte registrieren
+document.getElementById('toggleDidaktik').addEventListener('click', () => {
+    const card = document.getElementById('didaktikCard');
+    card.classList.toggle('collapsed');
 });
 
 document.getElementById('actionBtn').addEventListener('click', fuehreAktionAus);
@@ -639,19 +540,6 @@ document.getElementById('exportBtn').addEventListener('click', exportiereRohdate
 
 document.getElementById('resetBtn').addEventListener('click', () => {
     statistikZuruecksetzen();
-    
-    // Lösche auch die gezeichnete Vorhersage bei vollständigem Reset
-    if (aktuellerModus === 'massen') {
-        const labels = Object.keys(globaleStatistik);
-        vorhersageDaten = new Array(labels.length).fill(null);
-        document.getElementById('actionBtn').disabled = true;
-        document.getElementById('actionBtn').innerText = "Simulation gesperrt";
-        document.getElementById('predictBtn').innerText = "Kurve einzeichnen starten";
-        document.getElementById('predictBtn').className = "btn-predict";
-        document.getElementById('resetPredictBtn').classList.add('hidden');
-        document.getElementById('wurfErgebnisText').innerText = "Gib zuerst links deine Hypothese (Vorhersage) ab!";
-    }
-
     initChart();
     document.getElementById('historyList').innerHTML = '';
     if(aktuellerModus === 'einzel') {
@@ -667,20 +555,10 @@ const einstellungsIds = ['wuerfelSeiten', 'wuerfelAnzahl'];
 einstellungsIds.forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
         statistikZuruecksetzen();
-        vorhersageDaten = null; // Alte Vorhersage verwerfen, da sich die Skalierung/Labels ändern
         initChart();
         updateDidaktikText();
         document.getElementById('diceContainer').innerHTML = '';
         document.getElementById('historyList').innerHTML = '';
-        
-        if (aktuellerModus === 'massen') {
-            document.getElementById('actionBtn').disabled = true;
-            document.getElementById('actionBtn').innerText = "Simulation gesperrt";
-            document.getElementById('predictBtn').innerText = "Kurve einzeichnen starten";
-            document.getElementById('predictBtn').className = "btn-predict";
-            document.getElementById('resetPredictBtn').classList.add('hidden');
-            document.getElementById('wurfErgebnisText').innerText = "Gib zuerst links deine Hypothese (Vorhersage) ab!";
-        }
     });
 });
 
