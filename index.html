@@ -44,15 +44,6 @@
                     <div id="massenInputGroup" class="control-group hidden">
                         <label for="wurfAnzahl">Anzahl der Würfe (max. 100.000):</label>
                         <input type="number" id="wurfAnzahl" value="2000" min="10" max="100000">
-
-                        <div class="prediction-container">
-                            <p class="prediction-title">🔮 Deine Hypothese (Vorhersage):</p>
-                            <p class="prediction-help">Zeichne deine vermutete Verteilung direkt in das Diagramm ein, bevor du die Simulation startest.</p>
-                            <div class="prediction-buttons">
-                                <button id="predictBtn" type="button" class="btn-predict">Kurve einzeichnen starten</button>
-                                <button id="resetPredictBtn" type="button" class="btn-danger-outline hidden">Löschen</button>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="button-group">
@@ -65,7 +56,7 @@
                 <section id="visualCard" class="card visual-card">
                     <h2>Live-Wurf & Historie</h2>
                     <div id="diceContainer" class="dice-grid">
-                        </div>
+                    </div>
                     <div id="wurfErgebnisText" class="result-text">Klicke auf "Würfeln"!</div>
                     
                     <div class="history-container">
@@ -84,10 +75,13 @@
                 </section>
             </div>
 
-            <section class="card info-card full-width">
-                <h2>💡 Mathematischer Hintergrund & Verteilungsanalyse</h2>
-                <div id="didaktikInhalt">
-                    </div>
+            <section class="card info-card full-width collapsed" id="didaktikCard">
+                <div class="info-header" id="toggleDidaktik">
+                    <h2>💡 Mathematischer Hintergrund & Verteilungsanalyse</h2>
+                    <span class="toggle-icon">▲</span>
+                </div>
+                <div class="info-content" id="didaktikInhalt">
+                </div>
             </section>
         </div>
     </div>
