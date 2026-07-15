@@ -44,6 +44,15 @@
                     <div id="massenInputGroup" class="control-group hidden">
                         <label for="wurfAnzahl">Anzahl der Würfe (max. 100.000):</label>
                         <input type="number" id="wurfAnzahl" value="2000" min="10" max="100000">
+
+                        <div class="prediction-container">
+                            <p class="prediction-title">🔮 Deine Hypothese (Vorhersage):</p>
+                            <p class="prediction-help">Zeichne deine vermutete Verteilung direkt in das Diagramm ein, bevor du die Simulation startest.</p>
+                            <div class="prediction-buttons">
+                                <button id="predictBtn" type="button" class="btn-predict">Kurve einzeichnen starten</button>
+                                <button id="resetPredictBtn" type="button" class="btn-danger-outline hidden">Löschen</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="button-group">
