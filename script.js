@@ -6,16 +6,6 @@ let aktuellerModus = 'einzel';
 let simulationsInterval = null; 
 let simulationGestartet = false; // Trackt, ob die Simulation im Massenmodus aktiv läuft oder lief
 
-// Hilfsvariable für echte Würfel-Augen (Unicode) bei Standard-W6-Würfeln
-const w6Symbole = {
-    1: '⚀',
-    2: '⚁',
-    3: '⚂',
-    4: '⚃',
-    5: '⚄',
-    6: '⚅'
-};
-
 // Hilfsvariable: Welcher Index (bzw. welche Augensumme) wird als nächstes durch Klick geschätzt?
 let naechsterSchaetzIndex = 0; 
 
@@ -277,25 +267,19 @@ function initChart() {
                     }
                 }
             },
-            // --- DIE INTERAKTIVE KLICK-LOGIK ---
             onClick: function(event, activeElements, chart) {
                 if (aktuellerModus !== 'massen' || simulationGestartet) return;
 
-                // Holt die Y-Wert-Häufigkeit fehlerfrei direkt aus dem Event und den Skalen des Charts
                 const geklickterWertY = chart.scales.y.getValueForPixel(event.y);
-                
-                // Klicks außerhalb des sichtbaren Y-Bereichs ignorieren
                 if (geklickterWertY < 0 || geklickterWertY > chart.scales.y.max) return;
 
                 const runderWert = Math.max(0, Math.round(geklickterWertY));
                 const anzahlKlassen = schuelerVorhersage.length;
 
-                // Wenn wir noch nicht alle Spalten durch haben:
                 if (naechsterSchaetzIndex < anzahlKlassen) {
                     schuelerVorhersage[naechsterSchaetzIndex] = runderWert;
                     naechsterSchaetzIndex++;
                     
-                    // Chart sofort mit neuem Punkt rendern
                     initChart();
                     aktualisiereStartButtonStatus();
                 }
@@ -425,15 +409,9 @@ function fuehreAktionAus() {
         
         einzelErgebnisse.forEach(wert => {
             const diceHtml = document.createElement('div');
-            diceHtml.className = 'visual-dice';
-            
-            // WENN ES EIN STANDARD W6 IST: Würfelaugen-Symbol anzeigen, sonst die Zahl
-            if (seiten === 6 && w6Symbole[wert]) {
-                diceHtml.innerText = w6Symbole[wert];
-                diceHtml.style.fontSize = 'clamp(2.5rem, 8vw, 4rem)'; // Extra groß für die Würfelaugen!
-            } else {
-                diceHtml.innerText = wert;
-            }
+            // Zuweisung der passenden, typabhängigen CSS-Klasse (z.B. dice-w4, dice-w6...)
+            diceHtml.className = `visual-dice dice-w${seiten}`;
+            diceHtml.innerText = wert;
             container.appendChild(diceHtml);
         });
 
@@ -456,7 +434,6 @@ function fuehreAktionAus() {
             `Ergebnis: ${einzelErgebnisse.join(' + ')} = Augensumme ${summe}`;
             
     } else {
-        // --- MASSENSIMULATIONS-MODUS ---
         let inputField = document.getElementById('wurfAnzahl');
         let gesamtWuerfeZiel = parseInt(inputField.value) || 1000;
         
@@ -466,19 +443,15 @@ function fuehreAktionAus() {
             alert("Sicherheitshinweis: Die maximale Wurfanzahl ist auf 100.000 begrenzt.");
         }
 
-        // Überprüfen, ob die Schülerschätzung logisch zur Gesamtanzahl passt
         const summeSchaetzungen = schuelerVorhersage.reduce((a, b) => (a || 0) + (b || 0), 0);
         if (summeSchaetzungen > gesamtWuerfeZiel) {
             alert(`Deine eingezeichneten Schätzungen ergeben in Summe ${summeSchaetzungen.toLocaleString()} Würfe. Das übersteigt die geplante Simulationsanzahl von ${gesamtWuerfeZiel.toLocaleString()} Würfen! Setze die Statistik zurück und zeichne neu.`);
             return;
         }
 
-        // Simulation gilt ab hier als aktiv gestartet
         simulationGestartet = true; 
-        
         initChart(); 
         document.getElementById('exportBtn').disabled = true; 
-        
         simulationsStartZeitpunkt = performance.now();
         
         let chunks = 1;
