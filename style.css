@@ -166,8 +166,9 @@ select, input {
 
 .hidden { display: none !important; }
 
-.btn-primary { background-color: var(--primary); color: white; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem;}
+.btn-primary { background-color: var(--primary); color: white; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: background 0.2s;}
 .btn-primary:hover { background-color: var(--primary-hover); }
+.btn-primary:disabled { background-color: #cbd5e1; color: #94a3b8; cursor: not-allowed; }
 
 .btn-export { background-color: var(--success); color: white; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;}
 .btn-export:hover { background-color: var(--success-hover); }
@@ -175,6 +176,83 @@ select, input {
 
 .btn-danger { background-color: #f1f5f9; color: var(--danger); border: 2px solid #fee2e2; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;}
 .btn-danger:hover { background-color: #fee2e2; }
+
+/* Styles für das Schüler-Prediction-System */
+.prediction-container {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f0fdfa;
+    border: 2px solid #99f6e4;
+    border-radius: 12px;
+}
+
+.prediction-title {
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #0f766e;
+}
+
+.prediction-help {
+    margin: 0 0 12px 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #115e59;
+}
+
+.prediction-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-predict {
+    flex: 1;
+    background-color: var(--accent);
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-predict:hover {
+    filter: brightness(0.95);
+}
+
+.btn-predict.active-drawing {
+    background-color: var(--success);
+    animation: pulseBorder 1.5s infinite;
+}
+
+.btn-danger-outline {
+    background: white;
+    color: var(--danger);
+    border: 2px solid #fecaca;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-danger-outline:hover {
+    background: #fef2f2;
+}
+
+/* Fadenkreuz-Cursor signalisiert den Schülern, dass sie auf dem Chart zeichnen können */
+.drawing-active {
+    cursor: crosshair !important;
+}
+
+@keyframes pulseBorder {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
 
 .dice-grid {
     display: grid;
