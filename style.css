@@ -176,80 +176,39 @@ select, input {
 .btn-danger { background-color: #f1f5f9; color: var(--danger); border: 2px solid #fee2e2; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;}
 .btn-danger:hover { background-color: #fee2e2; }
 
-/* CSS-Raster für 3D-Würfel-Plattformen */
 .dice-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr; 
+    gap: 10px;
     justify-content: center;
     align-items: center;
-    padding: 25px 15px;
+    padding: 15px;
     background: #f8fafc;
     border-radius: 12px;
     border: 2px dashed #94a3b8;
     width: 100%;
-    min-height: 130px;
 }
 
-/* 3D-Würfel-Szenen und Perspektiven */
-.dice-scene {
-    width: 60px;
-    height: 60px;
-    perspective: 300px;
-}
-
-.cube {
+.visual-dice {
     width: 100%;
-    height: 100%;
-    position: relative;
-    transform-style: preserve-3d;
-    transition: transform 1.2s cubic-bezier(0.2, 0.85, 0.4, 1.05);
-}
-
-.cube-face {
-    position: absolute;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
-    border: 2px solid white;
-    color: white;
-    font-weight: bold;
-    font-size: 1.6rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.2), 0 2px 5px rgba(0,0,0,0.15);
-    backface-visibility: hidden;
-}
-
-/* Platzierung der Würfelflächen im 3D-Raum (Speziell für W6) */
-.cube-face.face-1 { transform: rotateY(0deg) translateZ(30px); }
-.cube-face.face-2 { transform: rotateY(90deg) translateZ(30px); }
-.cube-face.face-3 { transform: rotateX(90deg) translateZ(30px); }
-.cube-face.face-4 { transform: rotateX(-90deg) translateZ(30px); }
-.cube-face.face-5 { transform: rotateY(-90deg) translateZ(30px); }
-.cube-face.face-6 { transform: rotateY(180deg) translateZ(30px); }
-
-/* Für Nicht-W6-Würfel als Alternative: Schöner 2D-Animations-Würfel */
-.visual-dice-poly {
-    width: 60px;
-    height: 60px;
+    aspect-ratio: 1 / 1;
+    max-width: 80px;
+    margin: 0 auto;
     background: linear-gradient(135deg, var(--primary), var(--accent));
     color: white;
     border-radius: 12px;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.6rem;
+    font-size: clamp(1.2rem, 4vw, 2rem);
     font-weight: bold;
     box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
-    border: 2px solid white;
-    animation: polyRoll 0.8s cubic-bezier(0.2, 0.8, 0.3, 1);
+    animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes polyRoll {
-    0% { transform: scale(0.3) rotate(-360deg); opacity: 0; }
+@keyframes popIn {
+    0% { transform: scale(0.2) rotate(-40deg); opacity: 0; }
     100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
@@ -294,74 +253,23 @@ select, input {
     height: 320px;
 }
 
-/* Collapsible-Styles für den Didaktik-Bereich */
 .info-card {
     border-left: 6px solid var(--accent);
-    padding: 0;
-    overflow: hidden;
 }
-
-.info-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 18px 24px;
-    cursor: pointer;
-    background-color: var(--card-bg);
-    user-select: none;
-    transition: background-color 0.2s;
-}
-
-.info-header:hover {
-    background-color: #f8fafc;
-}
-
-.info-header h2 {
-    margin: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-}
-
-.toggle-icon {
-    font-size: 1rem;
-    color: var(--text-muted);
-    transition: transform 0.3s ease;
-}
-
-.info-content {
-    padding: 0 24px 24px 24px;
-    max-height: 1000px;
-    opacity: 1;
-    transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.4s ease;
-}
-
-/* Versteckter Zustand */
-.info-card.collapsed .info-content {
-    max-height: 0;
-    opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    pointer-events: none;
-}
-
-.info-card.collapsed .toggle-icon {
-    transform: rotate(180deg);
-}
-
-.info-content p {
+.info-card p {
     line-height: 1.6;
     margin: 0 0 12px 0;
 }
-.info-content h3 {
+.info-card h3 {
     margin-top: 18px;
     margin-bottom: 8px;
     color: var(--primary);
     font-size: 1.1rem;
 }
-.info-content ul {
+.info-card ul {
     margin: 0 0 12px 0;
     padding-left: 20px;
 }
-.info-content li {
+.info-card li {
     margin-bottom: 6px;
 }
