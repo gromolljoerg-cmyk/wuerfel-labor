@@ -1,6 +1,6 @@
 let meinChart = null;
 let globaleStatistik = {}; 
-let schuelerVorhersage = []; // Speichert die von den Schülern eingezeichneten Vorhersagewerte
+let schuelerVorhersage = []; // Speichert die von den Schülern geschätzten Werte (Zahlen oder null)
 let gesamtWuerfeZaehler = 0; 
 let aktuellerModus = 'einzel'; 
 let simulationsInterval = null; 
@@ -61,7 +61,6 @@ function statistikZuruecksetzen(clearPrediction = false) {
     let minSumme = anzahlWuerfel;
     let maxSumme = anzahlWuerfel * seiten;
     
-    // Vorhersage-Array nur neu aufbauen, wenn explizit gewünscht oder die Dimensionen nicht mehr stimmen
     if (clearPrediction || !schuelerVorhersage || schuelerVorhersage.length !== (maxSumme - minSumme + 1)) {
         schuelerVorhersage = [];
         for (let i = minSumme; i <= maxSumme; i++) {
@@ -118,8 +117,6 @@ function initChart() {
     let daten = Object.values(globaleStatistik);
 
     const gesamtKombinationen = Math.pow(seiten, anzahlWuerfel);
-    
-    // Verwende im Massenmodus sofort das Endziel für eine stabile Skalierung
     const gesamtZiel = parseInt(document.getElementById('wurfAnzahl').value) || 1000;
     const bezugsMenge = (aktuellerModus === 'massen') ? gesamtZiel : (gesamtWuerfeZaehler > 0 ? gesamtWuerfeZaehler : 100);
 
@@ -128,15 +125,18 @@ function initChart() {
         return (wege / gesamtKombinationen) * bezugsMenge;
     });
 
-    // --- BERECHNUNG DER FESTEN AXIS-SKALIERUNG ---
-    // Wir berechnen das theoretische Maximum der Kurve in der Mitte der Verteilung
-    const minSumme = anzahlWuerfel;
-    const maxSumme = anzahlWuerfel * seiten;
-    const zentrumSumme = Math.floor((minSumme + maxSumme) / 2);
-    const zentrumKombis = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, zentrumSumme);
-    const maxTheoretischeHoehe = (zentrumKombis / gesamtKombinationen) * gesamtZiel;
-    // 35% Sicherheitsabstand nach oben, damit die Kurven nicht am oberen Rand kleben
-    const festerMaxYWert = Math.ceil(maxTheoretischeHoehe * 1.35);
+    // Dynamische Berechnung des Maximums der Y-Achse
+    let festerMaxYWert = null;
+    if (aktuellerModus === 'massen') {
+        const minSumme = anzahlWuerfel;
+        const maxSumme = anzahlWuerfel * seiten;
+        const zentrumSumme = Math.floor((minSumme + maxSumme) / 2);
+        const zentrumKombis = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, zentrumSumme);
+        const maxTheoretischeHoehe = (zentrumKombis / gesamtKombinationen) * gesamtZiel;
+        
+        // Verhindert ein Feststecken bei 0, falls die Simulation noch nie lief
+        festerMaxYWert = maxTheoretischeHoehe > 0 ? Math.ceil(maxTheoretischeHoehe * 1.35) : 10;
+    }
 
     if (meinChart) {
         meinChart.destroy();
@@ -161,6 +161,7 @@ function initChart() {
     ];
 
     if (aktuellerModus === 'massen') {
+        // Mathematische Kurve
         datasets.push({
             label: `Mathematische Vorhersage-Kurve`,
             data: theoretischeVerteilung,
@@ -172,22 +173,27 @@ function initChart() {
             tension: 0.3,
             fill: false,
             order: 2,
-            hidden: !simulationGestartet // Wird versteckt, solange die Simulation nicht gestartet wurde
+            hidden: !simulationGestartet
         });
 
+        // Prüfen, ob überhaupt IRGENDETWAS geschätzt wurde
+        const hatIrgendeineSchaetzung = schuelerVorhersage.some(wert => wert !== null);
+
+        // Schüler-Kurve
         datasets.push({
-            label: `Schüler-Vorhersage (Klicke zum Einzeichnen)`,
-            data: [...schuelerVorhersage],
+            label: `Schüler-Vorhersage (Schätzung)`,
+            data: hatIrgendeineSchaetzung ? [...schuelerVorhersage] : [],
             type: 'line',
-            borderColor: '#10b981', // Grün
+            borderColor: '#10b981', 
             borderDash: [5, 5],
             borderWidth: 3,
-            pointRadius: 6,
+            pointRadius: hatIrgendeineSchaetzung ? (labels.length > 30 ? 0 : 6) : 0,
             pointHoverRadius: 9,
             pointBackgroundColor: '#10b981',
             tension: 0.3,
             fill: false,
-            order: 1
+            order: 1,
+            hidden: !hatIrgendeineSchaetzung
         });
     }
 
@@ -205,8 +211,7 @@ function initChart() {
                 y: { 
                     beginAtZero: true, 
                     grid: { color: '#e2e8f0' },
-                    // Wichtig: Im Massenmodus erzwingen wir die feste Skalierung von Anfang an!
-                    max: (aktuellerModus === 'massen') ? festerMaxYWert : null
+                    max: festerMaxYWert // Nutzt den flexiblen oder berechneten Wert
                 },
                 x: { grid: { display: false } }
             },
@@ -231,34 +236,6 @@ function initChart() {
             }
         }
     });
-
-    // Klick-Event, um Schülervorhersage einzuzeichnen (nur im Massenmodus vor dem Start)
-    ctx.canvas.onclick = function(evt) {
-        if (aktuellerModus !== 'massen' || !meinChart) return;
-        
-        // Sperre die Eingabe, falls die Simulation läuft oder bereits durchgelaufen ist
-        if (simulationGestartet) {
-            alert("Die Simulation läuft bereits oder ist beendet! Die Vorhersage kann jetzt nicht mehr geändert werden.");
-            return;
-        }
-
-        const points = meinChart.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true);
-        if (points.length > 0) {
-            const index = points[0].index;
-            
-            // Berechne den Y-Wert basierend auf der Klickposition
-            const rect = ctx.canvas.getBoundingClientRect();
-            const clickY = evt.clientY - rect.top;
-            const yValue = meinChart.scales.y.getValueForPixel(clickY);
-            
-            // Logische Schranken einhalten (0 bis maximaler Y-Skalenwert)
-            const gerundeterWert = Math.max(0, Math.min(meinChart.scales.y.max, Math.round(yValue)));
-            
-            schuelerVorhersage[index] = gerundeterWert;
-            meinChart.data.datasets[2].data[index] = gerundeterWert;
-            meinChart.update('none');
-        }
-    };
 }
 
 function aktualisiereChart() {
@@ -274,9 +251,7 @@ function aktualisiereChart() {
     meinChart.data.datasets[0].data = Object.values(globaleStatistik);
     
     if (meinChart.data.datasets[1]) {
-        // Blende die mathematische Kurve live ein/aus je nach Simulationsstatus
         meinChart.data.datasets[1].hidden = !simulationGestartet;
-        
         meinChart.data.datasets[1].data = meinChart.data.labels.map(summe => {
             let wege = berechneKombinationenFuerSumme(anzahlWuerfel, seiten, parseInt(summe));
             return (wege / gesamtKombinationen) * bezugsMenge;
@@ -353,7 +328,6 @@ function holeVergangeneSimulationsZeit() {
     if (!simulationsStartZeitpunkt) return "00:00.000";
     
     const jetzt = performance.now();
-    const differenzInMilliSekunden = jetzt - simulationsStartZeitblock || 0;
     const diff = jetzt - simulationsStartZeitpunkt;
     
     const gesamtSekunden = Math.floor(diff / 1000);
@@ -370,11 +344,8 @@ function fuehreAktionAus() {
     const seiten = parseInt(document.getElementById('wuerfelSeiten').value);
     const anzahlWuerfel = parseInt(document.getElementById('wuerfelAnzahl').value);
 
-    if (!simulationsStartZeitpunkt) {
-        simulationsStartZeitpunkt = performance.now();
-    }
-
     if (aktuellerModus === 'einzel') {
+        simulationsStartZeitpunkt = performance.now();
         const container = document.getElementById('diceContainer');
         container.innerHTML = ''; 
         
@@ -413,16 +384,6 @@ function fuehreAktionAus() {
             
     } else {
         // --- MASSENSIMULATIONS-MODUS ---
-        
-        // Prüfen, ob die Schüler überhaupt eine Vorhersage gemacht haben
-        const hatVorhersage = schuelerVorhersage.some(wert => wert !== null);
-        if (!hatVorhersage) {
-            const fortfahren = confirm("Es wurde noch keine Schüler-Vorhersage eingezeichnet. Möchtest du die Massensimulation trotzdem starten?");
-            if (!fortfahren) {
-                return; // Start abbrechen, damit die Schüler ihre Kurve einzeichnen können
-            }
-        }
-
         let inputField = document.getElementById('wurfAnzahl');
         let gesamtWuerfeZiel = parseInt(inputField.value) || 1000;
         
@@ -431,11 +392,43 @@ function fuehreAktionAus() {
             inputField.value = 100000; 
             alert("Sicherheitshinweis: Die maximale Wurfanzahl ist auf 100.000 begrenzt.");
         }
+
+        const minSumme = anzahlWuerfel;
+        const maxSumme = anzahlWuerfel * seiten;
         
-        // Setzt statistische Daten zurück, bewahrt aber schuelerVorhersage!
+        let temporaereSchaetzung = [];
+        let abbruchDurchSchueler = false;
+
+        for (let i = minSumme; i <= maxSumme; i++) {
+            let eingabe = prompt(`[SCHÄTZUNG] Gewünschte Gesamtanzahl Würfe: ${gesamtWuerfeZiel.toLocaleString()}\n\nWie oft wird die Augensumme "${i}" vorkommen?\n(Leerlassen für KEINE Vorhersage-Kurve)`, "");
+            
+            if (eingabe === null) {
+                abbruchDurchSchueler = true;
+                break;
+            }
+            
+            let getrimmteEingabe = eingabe.trim();
+            if (getrimmteEingabe === "") {
+                temporaereSchaetzung.push(null); 
+            } else {
+                let zahl = parseInt(getrimmteEingabe);
+                if (isNaN(zahl) || zahl < 0) {
+                    alert("Bitte gib eine gültige positive Zahl oder 0 ein.");
+                    i--; 
+                } else {
+                    temporaereSchaetzung.push(zahl);
+                }
+            }
+        }
+
+        if (abbruchDurchSchueler) {
+            alert("Simulation abgebrochen.");
+            return;
+        }
+
+        schuelerVorhersage = temporaereSchaetzung;
+        
         statistikZuruecksetzen(false); 
-        
-        // Setze den Status auf gestartet (blendet die mathematische Kurve ein und sperrt Klicks)
         simulationGestartet = true; 
         
         initChart(); 
@@ -549,11 +542,10 @@ function wechsleModus(modus) {
         massenInputGroup.classList.remove('hidden');
         visualCard.classList.add('hidden');
         actionBtn.innerText = 'Live-Simulation starten';
-        document.getElementById('wurfErgebnisText').innerText = 'Klicke ins Diagramm, um deine Vorhersage einzuzeichnen!';
+        document.getElementById('wurfErgebnisText').innerText = 'Beim Starten wird deine Vorhersage abgefragt!';
     }
     
     document.getElementById('historyList').innerHTML = ''; 
-    // Löscht die Schülervorhersage beim Moduswechsel, um einen sauberen Zustand zu garantieren
     statistikZuruecksetzen(true); 
     initChart();
     updateDidaktikText();
@@ -563,7 +555,6 @@ document.getElementById('actionBtn').addEventListener('click', fuehreAktionAus);
 document.getElementById('exportBtn').addEventListener('click', exportiereRohdatenAlsCSV);
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-    // Löscht die Schülervorhersage explizit beim Klick auf "Statistik zurücksetzen"
     statistikZuruecksetzen(true);
     initChart();
     document.getElementById('historyList').innerHTML = '';
@@ -579,7 +570,6 @@ document.getElementById('tabMassen').addEventListener('click', () => wechsleModu
 const einstellungsIds = ['wuerfelSeiten', 'wuerfelAnzahl', 'wurfAnzahl'];
 einstellungsIds.forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
-        // Löscht die Schülervorhersage, da sich der Wertebereich oder die Skalierung verändert hat
         statistikZuruecksetzen(true);
         initChart();
         updateDidaktikText();
