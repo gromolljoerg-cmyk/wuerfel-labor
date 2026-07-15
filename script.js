@@ -214,7 +214,7 @@ function initChart() {
 
         // Schüler-Kurve (wird live beim Klicken gezeichnet)
         datasets.push({
-            label: `Schähler-Vorhersage (Schätzung)`,
+            label: `Schüler-Vorhersage (Schätzung)`,
             data: hatIrgendeineSchaetzung ? [...schuelerVorhersage] : [],
             type: 'line',
             borderColor: '#10b981', 
@@ -578,6 +578,22 @@ function wechsleModus(modus) {
     initChart();
     updateDidaktikText();
 }
+
+// --- LOGIK FÜR DAS INTERAKTIVE EIN- UND AUSKLAPPEN DER DIDAKTIK ---
+document.getElementById('toggleDidaktik').addEventListener('click', () => {
+    const inhalt = document.getElementById('didaktikInhalt');
+    const arrow = document.getElementById('didaktikArrow');
+    
+    if (inhalt.style.display === 'none') {
+        inhalt.style.display = 'block';
+        arrow.innerText = '▲';
+        arrow.style.transform = 'rotate(0deg)';
+    } else {
+        inhalt.style.display = 'none';
+        arrow.innerText = '▼';
+        arrow.style.transform = 'rotate(180deg)';
+    }
+});
 
 document.getElementById('actionBtn').addEventListener('click', fuehreAktionAus);
 document.getElementById('exportBtn').addEventListener('click', exportiereRohdatenAlsCSV);
