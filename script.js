@@ -6,6 +6,16 @@ let aktuellerModus = 'einzel';
 let simulationsInterval = null; 
 let simulationGestartet = false; // Trackt, ob die Simulation im Massenmodus aktiv läuft oder lief
 
+// Hilfsvariable für echte Würfel-Augen (Unicode) bei Standard-W6-Würfeln
+const w6Symbole = {
+    1: '⚀',
+    2: '⚁',
+    3: '⚂',
+    4: '⚃',
+    5: '⚄',
+    6: '⚅'
+};
+
 // Hilfsvariable: Welcher Index (bzw. welche Augensumme) wird als nächstes durch Klick geschätzt?
 let naechsterSchaetzIndex = 0; 
 
@@ -416,7 +426,14 @@ function fuehreAktionAus() {
         einzelErgebnisse.forEach(wert => {
             const diceHtml = document.createElement('div');
             diceHtml.className = 'visual-dice';
-            diceHtml.innerText = wert;
+            
+            // WENN ES EIN STANDARD W6 IST: Würfelaugen-Symbol anzeigen, sonst die Zahl
+            if (seiten === 6 && w6Symbole[wert]) {
+                diceHtml.innerText = w6Symbole[wert];
+                diceHtml.style.fontSize = 'clamp(2.5rem, 8vw, 4rem)'; // Extra groß für die Würfelaugen!
+            } else {
+                diceHtml.innerText = wert;
+            }
             container.appendChild(diceHtml);
         });
 
